@@ -264,11 +264,174 @@ train_ohe_cols += train_ohe_col2
 binary_cols += train_ohe_cols
 
 train_df = train_df.cache()
-print("train_df.count()")
+#print("train_df.count()")
 print(train_df.count())
+#print("time() - t0")
+print(time() - t0)
+
+t0 = time()
+test_ohe_cols = []
+
+test_df, test_ohe_col0_names = ohe(test_df, nominal_cols[0])
+test_ohe_cols += test_ohe_col0_names
+
+test_df, test_ohe_col1_names = ohe(test_df, nominal_cols[1])
+test_ohe_cols += test_ohe_col1_names
+
+test_df, test_ohe_col2_names = ohe(test_df, nominal_cols[2])
+test_ohe_cols += test_ohe_col2_names
+
+test_binary_cols = col_names[binary_inx].tolist() + test_ohe_cols
+
+test_df = test_df.cache()
+print(test_df.count())
+print(time() - t0)
+
+def getAttributeRatio(df, numericCols, binaryCols, labelCol):
+    ratio_dict = {}
+    
+    if numericCols:
+        avg_dict = (df
+                .select(list(map(lambda c: sql.avg(c).alias(c), numericCols)))
+                .first()
+                .asDict())
+
+        ratio_dict.update(df
+                .groupBy(labelCol)
+                .avg(*numericCols)
+                .select(list(map(lambda c: sql.max(col('avg(' + c + ')')/avg_dict[c]).alias(c), numericCols)))
+                .fillna(0.0)
+                .first()
+                .asDict())
+    
+    if binaryCols:
+        ratio_dict.update((df
+                .groupBy(labelCol)
+                .agg(*list(map(lambda c: (sql.sum(col(c))/(sql.count(col(c)) - sql.sum(col(c)))).alias(c), binaryCols)))
+                .fillna(1000.0)
+                .select(*list(map(lambda c: sql.max(col(c)).alias(c), binaryCols)))
+                .first()
+                .asDict()))
+        
+    return OrderedDict(sorted(ratio_dict.items(), key=lambda v: -v[1]))
+
+def selectFeaturesByAR(ar_dict, min_ar):
+    return [f for f in ar_dict.keys() if ar_dict[f] >= min_ar]
+
+
+
+t0 = time()
+ar_dict = getAttributeRatio(train_df, numeric_cols, binary_cols, 'labels5')
+
+print(len(ar_dict))
+print("time() - t0")
+print(time() - t0)
+#print(ar_dict)
+
+
+#Data prep
+t0 = time()
+avg_dict = (train_df.select(list(map(lambda c: sql.avg(c).alias(c), numeric_cols))).first().asDict())
+std_dict = (train_df.select(list(map(lambda c: sql.stddev(c).alias(c), numeric_cols))).first().asDict())
+
+def standardizer(column):
+    return ((col(column) - avg_dict[column])/std_dict[column]).alias(column)
+
+
+
+train_scaler = [*binary_cols, *list(map(standardizer, numeric_cols)), *['id', 'labels2_index', 'labels2', 'labels5_index', 'labels5']]
+test_scaler = [*test_binary_cols, *list(map(standardizer, numeric_cols)), *['id', 'labels2_index', 'labels2', 'labels5_index', 'labels5']]
+
+scaled_train_df = (train_df.select(train_scaler).cache())
+scaled_test_df = (test_df.select(test_scaler).cache())
+
+print(scaled_train_df.count())
+print(scaled_test_df.count())
 print("time() - t0")
 print(time() - t0)
 
 
 
+from pyspark.ml.feature import VectorIndexer, VectorAssembler
+assembler = VectorAssembler(inputCols=selectFeaturesByAR(ar_dict, 0.01), outputCol='raw_features')
+indexer = VectorIndexer(inputCol='raw_features', outputCol='indexed_features', maxCategories=2)
 
+prep_pipeline = Pipeline(stages=[assembler, indexer])
+prep_model = prep_pipeline.fit(scaled_train_df)
+
+t0 = time()
+scaled_train_df = (prep_model
+        .transform(scaled_train_df)
+        .select('id', 'indexed_features', 'labels2_index', 'labels2', 'labels5_index', 'labels5')
+        .cache())
+
+scaled_test_df = (prep_model 
+        .transform(scaled_test_df)
+        .select('id', 'indexed_features','labels2_index', 'labels2', 'labels5_index', 'labels5')
+        .cache())
+
+print(scaled_train_df.count())
+print(scaled_test_df.count())
+print(time() - t0)
+
+seed = 5566979845606274384
+
+split = (scaled_train_df.randomSplit([0.8, 0.2], seed=seed))
+
+scaled_train_df = split[0].cache()
+scaled_cv_df = split[1].cache()
+
+print(scaled_train_df.count())
+print(scaled_cv_df.count())
+
+res_cv_df = scaled_cv_df.select(col('id'), col('labels2_index'), col('labels2'), col('labels5')).cache()
+res_test_df = scaled_test_df.select(col('id'), col('labels2_index'), col('labels2'), col('labels5')).cache()
+prob_cols = []
+pred_cols = []
+
+print("res_cv_df.count()")
+print(res_cv_df.count())
+print(res_test_df.count())
+
+import sklearn.metrics as metrics
+
+def printCM(cm, labels):
+    """pretty print for confusion matrixes"""
+    columnwidth = max([len(x) for x in labels])
+    # Print header
+    print(" " * columnwidth, end="\t")
+    for label in labels:
+        print("%{0}s".format(columnwidth) % label, end="\t")
+    print()
+    # Print rows
+    for i, label1 in enumerate(labels):
+        print("%{0}s".format(columnwidth) % label1, end="\t")
+        for j in range(len(labels)):
+            print("%{0}d".format(columnwidth) % cm[i, j], end="\t")
+        print()
+
+def getPrediction(e):
+    return udf(lambda row: 1.0 if row >= e else 0.0, DoubleType())
+        
+def printReport(resDF, probCol, labelCol='labels2_index', e=None, labels=['normal', 'attack']):
+    if (e):
+        predictionAndLabels = list(zip(*resDF.rdd
+                                       .map(lambda row: (1.0 if row[probCol] >= e else 0.0, row[labelCol]))
+                                       .collect()))
+    else:
+        predictionAndLabels = list(zip(*resDF.rdd
+                                       .map(lambda row: (row[probCol], row[labelCol]))
+                                       .collect()))
+    
+    cm = metrics.confusion_matrix(predictionAndLabels[1], predictionAndLabels[0])
+    printCM(cm, labels)
+    print(" ")
+    print("Accuracy = %g" % (metrics.accuracy_score(predictionAndLabels[1], predictionAndLabels[0])))
+    print("AUC = %g" % (metrics.roc_auc_score(predictionAndLabels[1], predictionAndLabels[0])))
+    print(" ")
+    print("False Alarm Rate = %g" % (cm[0][1]/(cm[0][0] + cm[0][1])))
+    print("Detection Rate = %g" % (cm[1][1]/(cm[1][1] + cm[1][0])))
+    print("F1 score = %g" % (metrics.f1_score(predictionAndLabels[1], predictionAndLabels[0], labels)))
+    print(" ")
+    print(metrics.classification_report(predictionAndLabels[1], predictionAndLabels[0]))
+    print(" ")
