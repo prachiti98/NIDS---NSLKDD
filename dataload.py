@@ -51,6 +51,7 @@ numeric_cols = col_names[numeric_inx].tolist()
 def load_dataset(path):
     dataset_rdd = sc.textFile(path, 8).map(lambda line: line.split(','))
     spark = SparkSession(sc)
+    spark.sparkContext.setLogLevel('WARN')
     dataset_df = (dataset_rdd.toDF(col_names.tolist()).select(
                     col('duration').cast(DoubleType()),
                     col('protocol_type').cast(StringType()),
