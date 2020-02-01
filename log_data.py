@@ -15,5 +15,8 @@ cols = ["num_conn","startTimet","orig_pt","resp_pt1","orig_ht","resp_ht",
 def get_server_logs_df():
   return pd.read_csv('trafAld.list', delimiter=' ', names=cols, header=None)
 
-if __name__ == '__main__':
+def save_file():
   get_server_logs_df().to_csv('realtime_test_dataset.csv', index=False)
+
+if __name__ == '__main__':
+  save_file()
