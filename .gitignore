@@ -1,3 +1,8 @@
 importvenv/
 hadoop/
 **__pycache__/
+conn.list
+conn_sort.list
+tcpdump.pcap
+trafAld.out
+trafAld.list
