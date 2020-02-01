@@ -51,6 +51,7 @@ numeric_cols = col_names[numeric_inx].tolist()
 def load_dataset(path):
     dataset_rdd = sc.textFile(path, 8).map(lambda line: line.split(','))
     spark = SparkSession(sc)
+    spark.sparkContext.setLogLevel('WARN')
     dataset_df = (dataset_rdd.toDF(col_names.tolist()).select(
                     col('duration').cast(DoubleType()),
                     col('protocol_type').cast(StringType()),
@@ -395,6 +396,7 @@ print(res_test_df.count())
 
 import sklearn.metrics as metrics
 
+#metrics needed
 def printCM(cm, labels):
     """pretty print for confusion matrixes"""
     columnwidth = max([len(x) for x in labels])
@@ -431,7 +433,161 @@ def printReport(resDF, probCol, labelCol='labels2_index', e=None, labels=['norma
     print(" ")
     print("False Alarm Rate = %g" % (cm[0][1]/(cm[0][0] + cm[0][1])))
     print("Detection Rate = %g" % (cm[1][1]/(cm[1][1] + cm[1][0])))
-    print("F1 score = %g" % (metrics.f1_score(predictionAndLabels[1], predictionAndLabels[0], labels)))
-    print(" ")
-    print(metrics.classification_report(predictionAndLabels[1], predictionAndLabels[0]))
-    print(" ")
+
+from pyspark.ml.feature import VectorSlicer
+from pyspark.ml.feature import PCA
+
+t0 = time()
+pca_slicer = VectorSlicer(inputCol="indexed_features", outputCol="features", names=selectFeaturesByAR(ar_dict, 0.05))
+
+pca = PCA(k=2, inputCol="features", outputCol="pca_features")
+pca_pipeline = Pipeline(stages=[pca_slicer, pca])
+
+pca_train_df = pca_pipeline.fit(scaled_train_df).transform(scaled_train_df)
+print(time() - t0)
+
+t0 = time()
+viz_train_data = np.array(pca_train_df.rdd.map(lambda row: [*row['pca_features'], row['labels2_index'], row['labels5_index']]).collect())
+#print(viz_train_data)
+plt.figure()
+plt.scatter(x=viz_train_data[:,0], y=viz_train_data[:,1], c=viz_train_data[:,2], cmap="Set1")
+plt.figure()
+plt.scatter(x=viz_train_data[:,0], y=viz_train_data[:,1], c=viz_train_data[:,3], cmap="Set1")
+#plt.show()
+print(time() - t0)
+
+
+#Model building
+
+kmeans_prob_col = 'kmeans_rf_prob'
+kmeans_pred_col = 'kmeans_rf_pred'
+
+prob_cols.append(kmeans_prob_col)
+pred_cols.append(kmeans_pred_col)
+
+#import
+# KMeans clustrering
+from pyspark.ml.clustering import KMeans
+
+t0 = time()
+kmeans_slicer = VectorSlicer(inputCol="indexed_features", outputCol="features", 
+                             names=list(set(selectFeaturesByAR(ar_dict, 0.1)).intersection(numeric_cols)))
+
+kmeans = KMeans(k=8, initSteps=25, maxIter=100, featuresCol="features", predictionCol="cluster", seed=seed)
+
+kmeans_pipeline = Pipeline(stages=[kmeans_slicer, kmeans])
+
+kmeans_model = kmeans_pipeline.fit(scaled_train_df)
+
+kmeans_train_df = kmeans_model.transform(scaled_train_df).cache()
+kmeans_cv_df = kmeans_model.transform(scaled_cv_df).cache()
+kmeans_test_df = kmeans_model.transform(scaled_test_df).cache()
+
+print(time() - t0)
+
+# Function for describing the contents of the clusters 
+def getClusterCrosstab(df, clusterCol='cluster'):
+    return (df.crosstab(clusterCol, 'labels2')
+              .withColumn('count', col('attack') + col('normal'))
+              .withColumn(clusterCol + '_labels2', col(clusterCol + '_labels2').cast('int'))
+              .sort(col(clusterCol +'_labels2').asc()))
+
+kmeans_crosstab = getClusterCrosstab(kmeans_train_df).cache()
+kmeans_crosstab.show(n=30)
+
+
+# Function for splitting clusters
+def splitClusters(crosstab):
+    exp = ((col('count') > 25) & (col('attack') > 0) & (col('normal') > 0))
+
+    cluster_rf = (crosstab
+        .filter(exp).rdd
+        .map(lambda row: (int(row['cluster_labels2']), [row['count'], row['attack']/row['count']]))
+        .collectAsMap())
+
+    cluster_mapping = (crosstab
+        .filter(~exp).rdd
+        .map(lambda row: (int(row['cluster_labels2']), 1.0 if (row['count'] <= 25) | (row['normal'] == 0) else 0.0))
+        .collectAsMap())
+    
+    return cluster_rf, cluster_mapping
+
+kmeans_cluster_rf, kmeans_cluster_mapping = splitClusters(kmeans_crosstab)
+
+print(len(kmeans_cluster_rf), len(kmeans_cluster_mapping))
+print(kmeans_cluster_mapping)
+print(kmeans_cluster_rf)
+
+#import
+from pyspark.ml.classification import RandomForestClassifier
+
+# This function returns Random Forest models for provided clusters
+def getClusterModels(df, cluster_rf):
+    cluster_models = {}
+
+    labels_col = 'labels2_cl_index'
+    labels2_indexer.setOutputCol(labels_col)
+
+    rf_slicer = VectorSlicer(inputCol="indexed_features", outputCol="rf_features", 
+                             names=selectFeaturesByAR(ar_dict, 0.05))
+
+    for cluster in cluster_rf.keys():
+        t1 = time()
+        rf_classifier = RandomForestClassifier(labelCol=labels_col, featuresCol='rf_features', seed=seed,
+                                               numTrees=500, maxDepth=20, featureSubsetStrategy="sqrt")
+        
+        rf_pipeline = Pipeline(stages=[labels2_indexer, rf_slicer, rf_classifier])
+        cluster_models[cluster] = rf_pipeline.fit(df.filter(col('cluster') == cluster))
+        print("Finished %g cluster in %g ms" % (cluster, time() - t1))
+        
+    return cluster_models
+
+# This utility function helps to get predictions/probabilities for the new data and return them into one dataframe
+def getProbabilities(df, probCol, cluster_mapping, cluster_models):
+    pred_df = (sqlContext.createDataFrame([], StructType([
+                    StructField('id', LongType(), False),
+                    StructField(probCol, DoubleType(), False)])))
+    
+    udf_map = udf(lambda cluster: cluster_mapping[cluster], DoubleType())
+    pred_df = pred_df.union(df.filter(col('cluster').isin(list(cluster_mapping.keys())))
+                            .withColumn(probCol, udf_map(col('cluster')))
+                            .select('id', probCol))
+
+                                       
+    for k in cluster_models.keys():
+        maj_label = cluster_models[k].stages[0].labels[0]
+        udf_remap_prob = udf(lambda row: float(row[0]) if (maj_label == 'attack') else float(row[1]), DoubleType())
+
+        pred_df = pred_df.union(cluster_models[k]
+                         .transform(df.filter(col('cluster') == k))
+                         .withColumn(probCol, udf_remap_prob(col('probability')))
+                         .select('id', probCol))
+
+    return pred_df
+
+
+# Training Random Forest classifiers for each of the clusters
+t0 = time()
+kmeans_cluster_models = getClusterModels(kmeans_train_df, kmeans_cluster_rf)
+print(time() - t0)
+
+t0 = time()
+res_cv_df = (res_cv_df.drop(kmeans_prob_col)
+             .join(getProbabilities(kmeans_cv_df, kmeans_prob_col, kmeans_cluster_mapping, kmeans_cluster_models), 'id')
+             .cache())
+
+print(res_cv_df.count())
+print(time() - t0)
+
+# t0 = time()
+# res_test_df = (res_test_df.drop(kmeans_prob_col)
+#                .join(getProbabilities(kmeans_test_df, kmeans_prob_col, kmeans_cluster_mapping, kmeans_cluster_models), 'id')
+#                .cache())
+
+# print(res_test_df.count())
+# print(time() - t0)
+
+# printReport(res_cv_df, kmeans_prob_col, e=0.5, labels=labels2)
+
+# printReport(res_test_df, kmeans_prob_col, e=0.01, labels=labels2)
+
