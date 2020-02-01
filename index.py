@@ -7,6 +7,7 @@ import random
 import os
 import sys
 import traceback
+import pickle
 
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import roc_auc_score
@@ -26,8 +27,8 @@ from sklearn.model_selection import train_test_split
 # from weka.classifiers import Classifier, Evaluation
 # from weka.filters import Filter
 
-train_url = 'KDDTrain+.txt'
-test_url = 'KDDTest+.txt'
+train_url = 'NSL_KDD_Dataset\KDDTrain+.txt'
+test_url = 'NSL_KDD_Dataset\KDDTest+.txt'
 
 # def use_filter(data):
 #     """
@@ -242,7 +243,7 @@ newlabeldf_test=labeldf_test.replace({ 'normal' : 0, 'neptune' : 1 ,'back': 1, '
 newdf['label'] = newlabeldf
 newdf_test['label'] = newlabeldf_test
 
-to_drop_DoS = [0,1,2]
+to_drop_DoS = [0,1,]
 to_drop_Probe = [0,2]
 to_drop_R2L = [0,3]
 to_drop_U2R = [0,4]
@@ -350,6 +351,8 @@ clf = RandomForestClassifier(n_estimators=10,n_jobs=2)
 
 clf_DoS = RandomForestClassifier(n_estimators=10,n_jobs=2)
 clf_DoS.fit(X_DoS, Y_DoS.astype(int))
+filename = 'finalized_model.sav'
+pickle.dump(clf_DoS, open(filename, 'wb'))
 clf_DoS.predict(X_DoS_test)
 clf_DoS.predict_proba(X_DoS_test)[0:10]
 
@@ -376,21 +379,27 @@ print("Accuracy: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
 # # print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
 
 
-# # serialize model to JSON
-# model_json = model.to_json()
-# with open("model.json", "w") as json_file:
-#     json_file.write(model_json)
-# # serialize weights to HDF5
-# model.save_weights("model.h5")
-# print("Saved model to disk")
- 
-# # later...
- 
-# # load json and create model
-# json_file = open('model.json', 'r')
-# loaded_model_json = json_file.read()
-# json_file.close()
-# loaded_model = model_from_json(loaded_model_json)
-# # load weights into new model
-# loaded_model.load_weights("model.h5")
-# print("Loaded model from disk")
+
+#SVm
+from sklearn.svm import SVC
+
+clf_SVM_DoS=SVC(kernel='linear', C=1.0, random_state=0)
+clf_SVM_DoS.fit(X_DoS, Y_DoS.astype(int))
+filename = 'svm_DoS.sav'
+pickle.dump(clf_SVM_DoS, open(filename, 'wb'))
+
+clf_SVM_Probe=SVC(kernel='linear', C=1.0, random_state=0)
+clf_SVM_Probe.fit(X_Probe, Y_Probe.astype(int))
+
+filename = 'svm_Probe.sav'
+pickle.dump(clf_SVM_DoS, open(filename, 'wb'))
+
+Y_DoS_pred=clf_SVM_DoS.predict(X_DoS_test)
+
+# Create confusion matrix
+pd.crosstab(Y_DoS_test, Y_DoS_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
+
+Y_Probe_pred=clf_SVM_Probe.predict(X_Probe_test)
+# Create confusion matrix
+
+pd.crosstab(Y_Probe_test, Y_Probe_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
