@@ -1,2 +1,3 @@
 importvenv/
 hadoop/
+**__pycache__/
