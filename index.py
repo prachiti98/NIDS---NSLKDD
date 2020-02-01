@@ -67,42 +67,31 @@ df_test = df_test.drop(['extra'], axis = 1)
 print('Dimensions of the Training set:',df.shape)
 print('Dimensions of the Test set:',df_test.shape)
 
-#WrapperSubsetClassifier
-# train_features, test_features, train_labels, test_labels = train_test_split(
-#     df.drop(labels=['target', 'ID'], axis=1),
-#     df['target'],
-#     test_size=0.2,
-#     random_state=41)
-
-# correlated_features = set()
-# correlation_matrix = df.corr()
-# for i in range(len(correlation_matrix .columns)):
-#     for j in range(i):
-#         if abs(correlation_matrix.iloc[i, j]) > 0.8:
-#             colname = correlation_matrix.columns[i]
-#             correlated_features.add(colname)
 
 
-# train_features.drop(labels=correlated_features, axis=1, inplace=True)
-# test_features.drop(labels=correlated_features, axis=1, inplace=True)
-
-# feature_selector = SequentialFeatureSelector(RandomForestClassifier(n_jobs=-1),
-#            k_features=15,
-#            forward=True,
-#            verbose=2,
-#            scoring='roc_auc',
-#            cv=4)
-
-# features = feature_selector.fit(np.array(train_features.fillna(0)), train_labels)
-# print(features)
-
-selected_col_names = ["protocol_type", "service", "flag", "src_bytes", 
-                      "dst_bytes", "wrong_fragment", "hot", "logged_in", 
-                      "root_shell", "num_root", "count", "srv_count", "serror_rate", 
-                      "rerror_rate", "same_srv_rate", "diff_srv_rate", "dst_host_count", 
+selected_col_names = ['duration' ,'protocol_type', 'service', 'flag', 'src_bytes', 
+                      'dst_bytes', 'wrong_fragment', 'hot', 'logged_in', 'land', 'urgent',
+                      'count', "srv_count", "serror_rate", 
+                      "rerror_rate", 'num_failed_logins', "diff_srv_rate", "dst_host_count", 
                       "dst_host_srv_count", "dst_host_same_srv_rate", "dst_host_diff_srv_rate", 
                       "dst_host_same_src_port_rate", "dst_host_srv_diff_host_rate", "dst_host_serror_rate", 
                       "dst_host_srv_serror_rate", "dst_host_rerror_rate", "dst_host_srv_rerror_rate", "label"]
+
+# #Features by Wrapper- Random Forest['duration', 'src_bytes', 'dst_bytes', 'land', 'wrong_fragment','urgent', 'count', 'srv_count', 'rerror_rate', 'dst_host_count',
+#        'dst_host_srv_count', 'dst_host_diff_srv_rate',
+#        'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate',
+#        'flag_SH']
+      
+#  Features by Wrapper - Naive Bayes['land', 'wrong_fragment', 'dst_host_srv_count',
+#        'dst_host_same_src_port_rate', 'service_Z39_50', 'service_pm_dump',
+#        'flag_SH']
+
+# Features by Wrapper - Decision Tree['duration', 'src_bytes', 'dst_bytes', 'land', 'wrong_fragment',
+#        'urgent', 'hot', 'num_failed_logins', 'logged_in', 'count', 'srv_count',
+#        'rerror_rate', 'dst_host_count', 'dst_host_srv_count',
+#        'dst_host_diff_srv_rate', 'dst_host_same_src_port_rate',
+#        'dst_host_srv_diff_host_rate', 'flag_SH']
+
 
 def select_columns(data_frame, column_names):
     new_frame = data_frame.loc[:, column_names]
@@ -111,7 +100,7 @@ def select_columns(data_frame, column_names):
 df = select_columns(df, selected_col_names)
 df_test = select_columns(df_test, selected_col_names)
 
-df.head(5)
+# df.head(5)
 
 #Print Attribute Values
 print('Label distribution Training set:')
@@ -355,15 +344,12 @@ clf_DoS.predict_proba(X_DoS_test)[0:10]
 
 Y_DoS_pred=clf_DoS.predict(X_DoS_test)
 
-
 # Create confusion matrix
 print(pd.crosstab(Y_DoS_test, Y_DoS_pred, rownames=['Actual attacks'], colnames=['Predicted attacks']))
 
 
 from sklearn.model_selection import cross_val_score
 from sklearn import metrics
-
-#FUTURE SCOPE
 
 accuracy = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='accuracy')
 print("Accuracy: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
@@ -375,22 +361,3 @@ print("Accuracy: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
 # # f = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='f1')
 # # print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
 
-
-# # serialize model to JSON
-# model_json = model.to_json()
-# with open("model.json", "w") as json_file:
-#     json_file.write(model_json)
-# # serialize weights to HDF5
-# model.save_weights("model.h5")
-# print("Saved model to disk")
- 
-# # later...
- 
-# # load json and create model
-# json_file = open('model.json', 'r')
-# loaded_model_json = json_file.read()
-# json_file.close()
-# loaded_model = model_from_json(loaded_model_json)
-# # load weights into new model
-# loaded_model.load_weights("model.h5")
-# print("Loaded model from disk")
