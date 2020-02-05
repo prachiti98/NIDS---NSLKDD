@@ -32,7 +32,7 @@ QuickScan.csv
 To get the results run it like:
 python try.py
 
-We compare the accuracy values obtained from different classifiers such as <b>Random Forest, kNN, SVM and Ensemble technique<b>.
+We compare the accuracy values obtained from different classifiers such as <b>Random Forest, kNN, SVM and Ensemble technique</b>.
 Accuracy values are calculated from the obtained confusion matrix as well as by using 10 fold cross validation technique insome cases.
 
 To run the model:
