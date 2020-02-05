@@ -17,34 +17,8 @@ from sklearn.model_selection import train_test_split
 
 
 
-
-
-# import weka.core.jvm as jvm
-# import wekaexamples.helper as helper
-# from weka.core.converters import Loader
-# from weka.core.classes import Random
-# from weka.attribute_selection import ASSearch, ASEvaluation, AttributeSelection
-# from weka.classifiers import Classifier, Evaluation
-# from weka.filters import Filter
-
-train_url = 'NSL_KDD_Dataset\KDDTrain+.txt'
-test_url = 'NSL_KDD_Dataset\KDDTest+.txt'
-
-# def use_filter(data):
-#     """
-#     Uses the AttributeSelection filter for attribute selection.
-#     :param data: the dataset to use
-#     :type data: Instances
-#     """
-#     print("\n2. Filter")
-#     flter = Filter(classname="weka.filters.supervised.attribute.AttributeSelection")
-#     aseval = ASEvaluation(classname="weka.attributeSelection.CfsSubsetEval")
-#     assearch = ASSearch(classname="weka.attributeSelection.GreedyStepwise", options=["-B"])
-#     flter.set_property("evaluator", aseval.jobject)
-#     flter.set_property("search", assearch.jobject)
-#     flter.inputformat(data)
-#     filtered = flter.filter(data)
-#     print(str(filtered))
+train_url = 'KDDTrain+.txt'
+test_url = 'KDDTest+.txt'
 
 
 col_names = ["duration","protocol_type","service","flag","src_bytes",
@@ -62,7 +36,8 @@ col_names = ["duration","protocol_type","service","flag","src_bytes",
 df = pd.read_csv(train_url,header=None, names = col_names)
 df= df.drop(['extra'], axis=1)
 
-df_test = pd.read_csv(test_url, header=None, names = col_names)
+df_test = pd.read_csv(test_url,header=None, names = col_names)
+
 df_test = df_test.drop(['extra'], axis = 1)
 
 print('Dimensions of the Training set:',df.shape)
@@ -78,16 +53,22 @@ selected_col_names = ['duration' ,'protocol_type', 'service', 'flag', 'src_bytes
                       "dst_host_same_src_port_rate", "dst_host_srv_diff_host_rate", "dst_host_serror_rate", 
                       "dst_host_srv_serror_rate", "dst_host_rerror_rate", "dst_host_srv_rerror_rate", "label"]
 
-# #Features by Wrapper- Random Forest['duration', 'src_bytes', 'dst_bytes', 'land', 'wrong_fragment','urgent', 'count', 'srv_count', 'rerror_rate', 'dst_host_count',
+for col in df_test.columns.tolist():
+    if col not in selected_col_names:
+        df_test.drop(col, axis=1, inplace=True)
+
+print("Columns", df_test.columns.tolist())
+
+#Features by Wrapper- Random Forest['duration', 'src_bytes', 'dst_bytes', 'land', 'wrong_fragment','urgent', 'count', 'srv_count', 'rerror_rate', 'dst_host_count',
 #        'dst_host_srv_count', 'dst_host_diff_srv_rate',
 #        'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate',
 #        'flag_SH']
       
-#  Features by Wrapper - Naive Bayes['land', 'wrong_fragment', 'dst_host_srv_count',
+#Features by Wrapper - Naive Bayes['land', 'wrong_fragment', 'dst_host_srv_count',
 #        'dst_host_same_src_port_rate', 'service_Z39_50', 'service_pm_dump',
 #        'flag_SH']
 
-# Features by Wrapper - Decision Tree['duration', 'src_bytes', 'dst_bytes', 'land', 'wrong_fragment',
+#Features by Wrapper - Decision Tree['duration', 'src_bytes', 'dst_bytes', 'land', 'wrong_fragment',
 #        'urgent', 'hot', 'num_failed_logins', 'logged_in', 'count', 'srv_count',
 #        'rerror_rate', 'dst_host_count', 'dst_host_srv_count',
 #        'dst_host_diff_srv_rate', 'dst_host_same_src_port_rate',
@@ -101,14 +82,12 @@ def select_columns(data_frame, column_names):
 df = select_columns(df, selected_col_names)
 df_test = select_columns(df_test, selected_col_names)
 
-# df.head(5)
-
-#Print Attribute Values
-print('Label distribution Training set:')
-print(df['label'].value_counts())
-print()
-print('Label distribution Test set:')
-print(df_test['label'].value_counts())
+# #Print Attribute Values
+# print('Label distribution Training set:')
+# print(df['label'].value_counts())
+# print()
+# print('Label distribution Test set:')
+# print(df_test['label'].value_counts())
 
 print('Training set:')
 for col_name in df.columns:
@@ -155,6 +134,7 @@ unique_flag2=[string3 + x for x in unique_flag]
 print(unique_flag2)
 
 
+
 # put together
 dumcols=unique_protocol2 + unique_service2 + unique_flag2
 
@@ -162,7 +142,7 @@ dumcols=unique_protocol2 + unique_service2 + unique_flag2
 #do it for test set
 unique_service_test=sorted(df_test.service.unique())
 unique_service2_test=[string2 + x for x in unique_service_test]
-testdumcols=unique_protocol2 + unique_service2_test + unique_flag2
+testdumcols=unique_protocol2 + unique_service2_test + unique_flag2 
 
 df_categorical_values_enc=df_categorical_values.apply(LabelEncoder().fit_transform)
 
@@ -181,6 +161,8 @@ df_cat_data = pd.DataFrame(df_categorical_values_encenc.toarray(),columns=dumcol
 
 # test set
 testdf_categorical_values_encenc = enc.fit_transform(testdf_categorical_values_enc)
+
+
 testdf_cat_data = pd.DataFrame(testdf_categorical_values_encenc.toarray(),columns=testdumcols)
 
 df_cat_data.head()
@@ -232,39 +214,33 @@ newlabeldf_test=labeldf_test.replace({ 'normal' : 0, 'neptune' : 1 ,'back': 1, '
 newdf['label'] = newlabeldf
 newdf_test['label'] = newlabeldf_test
 
-to_drop_DoS = [0,1,]
+to_drop_DoS = [0,1]
 to_drop_Probe = [0,2]
-to_drop_R2L = [0,3]
-to_drop_U2R = [0,4]
 
-# Kendisi dışındaki label değerine sahip tüm satırları filtrele
-# isin filter function
+
+# Filter all rows with label value other than itself
 
 DoS_df=newdf[newdf['label'].isin(to_drop_DoS)]
 Probe_df=newdf[newdf['label'].isin(to_drop_Probe)]
-R2L_df=newdf[newdf['label'].isin(to_drop_R2L)]
-U2R_df=newdf[newdf['label'].isin(to_drop_U2R)]
+
 
 
 
 #test
 DoS_df_test=newdf_test[newdf_test['label'].isin(to_drop_DoS)]
 Probe_df_test=newdf_test[newdf_test['label'].isin(to_drop_Probe)]
-R2L_df_test=newdf_test[newdf_test['label'].isin(to_drop_R2L)]
-U2R_df_test=newdf_test[newdf_test['label'].isin(to_drop_U2R)]
+
 
 
 print('Train:')
 print('Dimensions of DoS:' ,DoS_df.shape)
 print('Dimensions of Probe:' ,Probe_df.shape)
-print('Dimensions of R2L:' ,R2L_df.shape)
-print('Dimensions of U2R:' ,U2R_df.shape)
+
 print()
 print('Test:')
 print('Dimensions of DoS:' ,DoS_df_test.shape)
 print('Dimensions of Probe:' ,Probe_df_test.shape)
-print('Dimensions of R2L:' ,R2L_df_test.shape)
-print('Dimensions of U2R:' ,U2R_df_test.shape)
+
 
 # Split dataframes into X & Y
 
@@ -275,11 +251,6 @@ Y_DoS = DoS_df.label
 X_Probe = Probe_df.drop('label',1)
 Y_Probe = Probe_df.label
 
-X_R2L = R2L_df.drop('label',1)
-Y_R2L = R2L_df.label
-
-X_U2R = U2R_df.drop('label',1)
-Y_U2R = U2R_df.label
 
 # test set
 X_DoS_test = DoS_df_test.drop('label',1)
@@ -288,11 +259,6 @@ Y_DoS_test = DoS_df_test.label
 X_Probe_test = Probe_df_test.drop('label',1)
 Y_Probe_test = Probe_df_test.label
 
-X_R2L_test = R2L_df_test.drop('label',1)
-Y_R2L_test = R2L_df_test.label
-
-X_U2R_test = U2R_df_test.drop('label',1)
-Y_U2R_test = U2R_df_test.label
 
 colNames=list(X_DoS)
 colNames_test=list(X_DoS_test)
@@ -305,11 +271,6 @@ X_DoS=scaler1.transform(X_DoS)
 scaler2 = preprocessing.StandardScaler().fit(X_Probe)
 X_Probe=scaler2.transform(X_Probe)
 
-scaler3 = preprocessing.StandardScaler().fit(X_R2L)
-X_R2L=scaler3.transform(X_R2L)
-
-scaler4 = preprocessing.StandardScaler().fit(X_U2R)
-X_U2R=scaler4.transform(X_U2R) 
 
 # test data
 scaler5 = preprocessing.StandardScaler().fit(X_DoS_test)
@@ -318,22 +279,15 @@ X_DoS_test=scaler5.transform(X_DoS_test)
 scaler6 = preprocessing.StandardScaler().fit(X_Probe_test)
 X_Probe_test=scaler6.transform(X_Probe_test) 
 
-scaler7 = preprocessing.StandardScaler().fit(X_R2L_test)
-X_R2L_test=scaler7.transform(X_R2L_test) 
-
-scaler8 = preprocessing.StandardScaler().fit(X_U2R_test)
-X_U2R_test=scaler8.transform(X_U2R_test)
 
 
+#Random Forest
 
-#Random Forest (only DoS right now)
-
+print("Random Forest")
 from sklearn.feature_selection import RFE
 from sklearn.ensemble import RandomForestClassifier
 
-
 clf = RandomForestClassifier(n_estimators=10,n_jobs=2)
-#rfe = RFE(estimator=clf, n_features_to_select=13, step=1)
 
 #DoS
 
@@ -347,26 +301,44 @@ clf_DoS.predict_proba(X_DoS_test)[0:10]
 
 Y_DoS_pred=clf_DoS.predict(X_DoS_test)
 
-# Create confusion matrix
-print(pd.crosstab(Y_DoS_test, Y_DoS_pred, rownames=['Actual attacks'], colnames=['Predicted attacks']))
-
-
 from sklearn.model_selection import cross_val_score
 from sklearn import metrics
 
+# Create confusion matrix
+pd.crosstab(Y_DoS_test, Y_DoS_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
 accuracy = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='accuracy')
-print("Accuracy: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+print("Accuracy of RF DoS: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+precision = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='precision')
+print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
+recall = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='recall')
+print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
+f = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='f1')
+print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
 
-# #precision = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='precision')
-# #print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
-# recall = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='recall' )
-# print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
-# # f = cross_val_score(clf_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='f1')
-# # print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
+#Probe
+clf_Probe=RandomForestClassifier(n_estimators=10,n_jobs=2)
+
+clf_Probe.fit(X_Probe, Y_Probe.astype(int))
+
+Y_Probe_pred=clf_Probe.predict(X_Probe_test)
+
+
+pd.crosstab(Y_Probe_test, Y_Probe_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
+
+accuracy = cross_val_score(clf_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='accuracy')
+print("Accuracy of RF Probe: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+precision = cross_val_score(clf_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='precision_macro')
+print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
+recall = cross_val_score(clf_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='recall_macro')
+print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
+f = cross_val_score(clf_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='f1_macro')
+print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
 
 
 
-#SVm
+#SVM
+
+print("SVM")
 from sklearn.svm import SVC
 
 clf_SVM_DoS=SVC(kernel='linear', C=1.0, random_state=0)
@@ -383,9 +355,110 @@ pickle.dump(clf_SVM_DoS, open(filename, 'wb'))
 Y_DoS_pred=clf_SVM_DoS.predict(X_DoS_test)
 
 # Create confusion matrix
-pd.crosstab(Y_DoS_test, Y_DoS_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
+print("Confusion Matrix for SVM")
+print(pd.crosstab(Y_DoS_test, Y_DoS_pred, rownames=['Actual attacks'], colnames=['Predicted attacks']))
 
 Y_Probe_pred=clf_SVM_Probe.predict(X_Probe_test)
 # Create confusion matrix
 
 pd.crosstab(Y_Probe_test, Y_Probe_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
+
+
+accuracy = cross_val_score(clf_SVM_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='accuracy')
+print("Accuracy of SVM DoS: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
+recall = cross_val_score(clf_SVM_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='recall')
+print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
+f = cross_val_score(clf_SVM_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='f1')
+print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
+accuracy = cross_val_score(clf_SVM_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='accuracy')
+
+print("Accuracy of SVM Probe: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+precision = cross_val_score(clf_SVM_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='precision_macro')
+print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
+recall = cross_val_score(clf_SVM_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='recall_macro')
+print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
+f = cross_val_score(clf_SVM_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='f1_macro')
+print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
+
+
+#KMeans
+
+print("KMeans")
+from sklearn.neighbors import KNeighborsClassifier
+
+#DoS
+clf_KNN_DoS=KNeighborsClassifier()
+clf_KNN_DoS.fit(X_DoS, Y_DoS.astype(int))
+
+Y_DoS_pred=clf_KNN_DoS.predict(X_DoS_test)
+
+#Confusion Matrix
+pd.crosstab(Y_DoS_test, Y_DoS_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
+
+accuracy = cross_val_score(clf_KNN_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='accuracy')
+print("Accuracy of KNN DoS: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+precision = cross_val_score(clf_KNN_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='precision')
+print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
+recall = cross_val_score(clf_KNN_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='recall')
+print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
+f = cross_val_score(clf_KNN_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='f1')
+print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
+
+#Probe
+
+clf_KNN_Probe=KNeighborsClassifier()
+clf_KNN_Probe.fit(X_Probe, Y_Probe.astype(int))
+
+Y_Probe_pred=clf_KNN_Probe.predict(X_Probe_test)
+# Create confusion matrix
+
+pd.crosstab(Y_Probe_test, Y_Probe_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
+
+accuracy = cross_val_score(clf_KNN_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='accuracy')
+print("Accuracy of KNN Probe: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+precision = cross_val_score(clf_KNN_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='precision_macro')
+print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
+recall = cross_val_score(clf_KNN_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='recall_macro')
+print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
+f = cross_val_score(clf_KNN_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='f1_macro')
+print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
+
+#Ensemble Learning
+from sklearn.ensemble import VotingClassifier
+
+clf_voting_DoS = VotingClassifier(estimators=[('rf', clf_DoS), ('knn', clf_KNN_DoS), ('svm', clf_SVM_DoS)], voting='hard')
+clf_voting_Probe = VotingClassifier(estimators=[('rf', clf_Probe), ('knn', clf_KNN_Probe), ('svm', clf_SVM_Probe)], voting='hard')
+
+clf_voting_DoS.fit(X_DoS, Y_DoS.astype(int))
+clf_voting_Probe.fit(X_Probe, Y_Probe.astype(int))
+
+Y_DoS_pred=clf_voting_DoS.predict(X_DoS_test)
+
+# Create confusion matrix
+pd.crosstab(Y_DoS_test, Y_DoS_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
+
+Y_Probe_pred=clf_voting_Probe.predict(X_Probe_test)
+
+# Create confusion matrix
+pd.crosstab(Y_Probe_test, Y_Probe_pred, rownames=['Actual attacks'], colnames=['Predicted attacks'])
+
+print("Ensemble Learning")
+accuracy = cross_val_score(clf_voting_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='accuracy')
+print("Accuracy of Ensemble Learning DoS: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+precision = cross_val_score(clf_voting_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='precision')
+print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
+recall = cross_val_score(clf_voting_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='recall')
+print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
+f = cross_val_score(clf_voting_DoS, X_DoS_test, Y_DoS_test, cv=10, scoring='f1')
+print("F-measure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
+
+accuracy = cross_val_score(clf_voting_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='accuracy')
+print("Accuracy: %0.5f (+/- %0.5f)" % (accuracy.mean(), accuracy.std() * 2))
+precision = cross_val_score(clf_voting_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='precision_macro')
+print("Precision: %0.5f (+/- %0.5f)" % (precision.mean(), precision.std() * 2))
+recall = cross_val_score(clf_voting_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='recall_macro')
+print("Recall: %0.5f (+/- %0.5f)" % (recall.mean(), recall.std() * 2))
+f = cross_val_score(clf_voting_Probe, X_Probe_test, Y_Probe_test, cv=10, scoring='f1_macro')
+print("F-mesaure: %0.5f (+/- %0.5f)" % (f.mean(), f.std() * 2))
+
