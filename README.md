@@ -5,7 +5,7 @@ A Network Intrusion Detection System (NIDS) trained on NSL-KDD+ dataset to detec
 Learning models/algorithms. Feature selection algorithms are used improve the performance of the model and classifier leading to more
 efficient results.
 
-<img src = "nids.png" alt = "Block diagram for Network Intrusion Detection System">
+<img src = "nids.jpg" alt = "Block diagram for Network Intrusion Detection System">
 
 Install the requirements by:
 pip install -r requirements.py (Make sure your default is Python 3.6+)
