@@ -7,7 +7,7 @@ lazy-object-proxy==1.4.3
 matplotlib==3.1.2
 mccabe==0.6.1
 mlxtend==0.17.1
-numpy==1.18.1
+numpy==1.22.0
 pandas==0.25.3
 pkg-resources==0.0.0
 py4j==0.10.7
